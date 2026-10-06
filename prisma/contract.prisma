@@ -1,0 +1,328 @@
+// use prisma-8
+// ManagingStock contract: one company per deployment, USD, English.
+// Money = numeric(14,2); quantities = numeric(14,3) (kg / m can be fractional).
+
+types {
+  Money = Numeric(precision: 14, scale: 2)
+  Qty   = Numeric(precision: 14, scale: 3)
+  Rate  = Numeric(precision: 5, scale: 2)
+}
+
+enum Role {
+  @@type("pg/text@1")
+  ADMIN = "admin"
+  MANAGER = "manager"
+  FINANCE = "finance"
+  STOCK = "stock"
+  CASHIER = "cashier"
+}
+
+enum Unit {
+  @@type("pg/text@1")
+  KG = "kg"
+  METER = "m"
+  UNIT = "unit"
+}
+
+enum DocType {
+  @@type("pg/text@1")
+  INVOICE = "invoice"
+  DRAFT = "draft"
+  DELIVERY_NOTE = "delivery_note"
+  UNINVOICED = "uninvoiced"
+  CREDIT_NOTE = "credit_note"
+}
+
+enum MovementType {
+  @@type("pg/text@1")
+  PURCHASE = "purchase"
+  SALE = "sale"
+  RETURN = "return"
+  ADJUST = "adjust"
+}
+
+enum PayMethod {
+  @@type("pg/text@1")
+  CASH = "cash"
+  CHEQUE = "cheque"
+}
+
+enum NotifType {
+  @@type("pg/text@1")
+  LOW_STOCK = "low_stock"
+  INFO = "info"
+}
+
+model Users {
+  id           Int      @id @default(autoincrement())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(CASHIER)
+  isActive     Boolean  @default(true)
+  createdAt    TimestamptzString @default(now())
+}
+
+// Single-row table (one company per deployment).
+model CompanyInfo {
+  id                 Int      @id @default(autoincrement())
+  companyName        String
+  phoneNumber        String
+  email              String?
+  address            String
+  businessLicense    String?
+  taxIdNumber        String?
+  commercialRegister String?
+  socialSecurityNo   String?
+  commonBusinessId   String?
+  logoPath           String?
+  defaultTvaRate     Rate
+  updatedAt          TimestamptzString @default(now())
+}
+
+model Categories {
+  id        Int        @id @default(autoincrement())
+  name      String     @unique
+  createdAt TimestamptzString   @default(now())
+  products  Products[]
+}
+
+model Suppliers {
+  id               Int                @id @default(autoincrement())
+  companyName      String
+  contactName      String
+  phone1           String
+  phone2           String?
+  fax              String?
+  address          String?
+  activities       String?
+  createdAt        TimestamptzString           @default(now())
+  products         Products[]
+  supplierInvoices SupplierInvoices[]
+  payments         Payments[]
+  credits          Credits[]
+}
+
+model ClientGroups {
+  id        Int       @id @default(autoincrement())
+  name      String    @unique
+  createdAt TimestamptzString  @default(now())
+  clients   Clients[]
+}
+
+model Clients {
+  id        Int           @id @default(autoincrement())
+  name      String
+  phone     String?
+  email     String?
+  ice       String?       @unique
+  address   String?
+  groupId   Int?
+  createdAt TimestamptzString      @default(now())
+  group     ClientGroups? @relation(fields: [groupId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  documents Documents[]
+  payments  Payments[]
+  credits   Credits[]
+}
+
+model Products {
+  id             Int             @id @default(autoincrement())
+  barcode        String          @unique
+  reference      String
+  name           String
+  description    String?
+  unit           Unit            @default(UNIT)
+  packaging      String?
+  imagePath      String?
+  quantity       Qty
+  minQtyAlert    Qty
+  quotePrice     Money
+  purchasePrice  Money
+  sellingPrice   Money
+  categoryId     Int
+  supplierId     Int?
+  createdAt      TimestamptzString        @default(now())
+  updatedAt      TimestamptzString        @default(now())
+  category       Categories      @relation(fields: [categoryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  supplier       Suppliers?      @relation(fields: [supplierId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  movements      StockMovements[]
+  lines          DocumentLines[]
+  notifications  Notifications[]
+
+  @@index([reference])
+  @@check(expression: "quantity >= 0", name: "products_quantity_nonneg")
+}
+
+// Every stock change; quantity is signed (+ in, - out). Restocks keep the price history.
+model StockMovements {
+  id         Int          @id @default(autoincrement())
+  productId  Int
+  type       MovementType
+  quantity   Qty
+  unitCost   Money
+  unitPrice  Money
+  documentId Int?
+  userId     Int?
+  createdAt  TimestamptzString     @default(now())
+  product    Products     @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  document   Documents?   @relation(fields: [documentId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([productId, createdAt])
+}
+
+// Next number per (type, year); incremented inside the document transaction.
+model DocumentCounters {
+  id      Int     @id @default(autoincrement())
+  type    DocType
+  year    Int
+  lastSeq Int     @default(0)
+
+  @@unique([type, year])
+}
+
+// Invoice / draft / delivery note / un-invoiced sale / credit note.
+model Documents {
+  id                Int              @id @default(autoincrement())
+  type              DocType
+  year              Int
+  seq               Int
+  number            String           @unique
+  clientId          Int?
+  userId            Int
+  documentDate      DateString             @default(now())
+  subtotal          Money
+  discountTotal     Money
+  tvaTotal          Money
+  total             Money
+  relatedDocumentId Int?
+  note              String?
+  createdAt         TimestamptzString         @default(now())
+  client            Clients?         @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  user              Users            @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  related           Documents?       @relation("DocumentRelated", fields: [relatedDocumentId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  lines             DocumentLines[]
+  payments          Payments[]
+  credits           Credits[]
+  movements         StockMovements[]
+
+  @@unique([type, year, seq])
+  @@index([type, documentDate])
+  @@index([clientId])
+}
+
+model DocumentLines {
+  id              Int       @id @default(autoincrement())
+  documentId      Int
+  productId       Int
+  description     String
+  quantity        Qty
+  unitPrice       Money
+  unitCost        Money
+  discountPercent Rate
+  tvaRate         Rate
+  lineSubtotal    Money
+  tvaAmount       Money
+  lineTotal       Money
+  document        Documents @relation(fields: [documentId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  product         Products  @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([documentId])
+  @@index([productId])
+}
+
+model SupplierInvoices {
+  id          Int        @id @default(autoincrement())
+  supplierId  Int
+  reference   String
+  invoiceDate DateString       @default(now())
+  total       Money
+  createdAt   TimestamptzString   @default(now())
+  supplier    Suppliers  @relation(fields: [supplierId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  payments    Payments[]
+  credits     Credits[]
+
+  @@index([supplierId])
+}
+
+// Cash / cheque ledger. Amount is signed (negative = refund / money out).
+// Belongs to a client (sales) or a supplier (purchases).
+model Payments {
+  id                Int               @id @default(autoincrement())
+  method            PayMethod
+  amount            Money
+  chequeNumber      String?
+  bank              String?
+  documentId        Int?
+  supplierInvoiceId Int?
+  clientId          Int?
+  supplierId        Int?
+  userId            Int?
+  createdAt         TimestamptzString          @default(now())
+  document          Documents?        @relation(fields: [documentId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  supplierInvoice   SupplierInvoices? @relation(fields: [supplierInvoiceId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  client            Clients?          @relation(fields: [clientId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  supplier          Suppliers?        @relation(fields: [supplierId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([method, createdAt])
+  @@check(expression: "num_nonnulls(\"clientId\", \"supplierId\") <= 1", name: "payments_one_party")
+}
+
+// Money owed: by a client (sale on credit) or to a supplier (purchase on credit).
+// Remaining balance = amount - SUM(credit_payments.amount). A payment with no method is an offset from a return.
+model Credits {
+  id                Int               @id @default(autoincrement())
+  amount            Money
+  clientId          Int?
+  supplierId        Int?
+  documentId        Int?
+  supplierInvoiceId Int?
+  createdAt         TimestamptzString          @default(now())
+  client            Clients?          @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  supplier          Suppliers?        @relation(fields: [supplierId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  document          Documents?        @relation(fields: [documentId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  supplierInvoice   SupplierInvoices? @relation(fields: [supplierInvoiceId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  payments          CreditPayments[]
+
+  @@check(expression: "num_nonnulls(\"clientId\", \"supplierId\") = 1", name: "credits_one_party")
+}
+
+model CreditPayments {
+  id        Int       @id @default(autoincrement())
+  creditId  Int
+  amount    Money
+  method    PayMethod?
+  createdAt TimestamptzString  @default(now())
+  credit    Credits   @relation(fields: [creditId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([creditId])
+}
+
+model Expenses {
+  id          Int      @id @default(autoincrement())
+  description String
+  amount      Money
+  expenseDate DateString     @default(now())
+  userId      Int?
+  createdAt   TimestamptzString @default(now())
+
+  @@index([expenseDate])
+}
+
+model Notifications {
+  id        Int       @id @default(autoincrement())
+  type      NotifType @default(INFO)
+  message   String
+  productId Int?
+  isRead    Boolean   @default(false)
+  createdAt TimestamptzString  @default(now())
+  product   Products? @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+}
+
+model Session {
+  sid    VarChar              @id(map: "session_pkey")
+  expire TimestamptzString(6)
+  sess   Json
+
+  @@index([expire], map: "IDX_session_expire")
+  @@map("session")
+}

@@ -1,0 +1,30 @@
+services:
+  db:
+    image: postgres
+    container_name: managing_stock_postgres_db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: managing_stock_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - mana_stock_pgdata:/var/lib/postgresql/
+  adminer:
+    image: adminer
+    container_name: managing_stock_adminer
+    restart: always
+    ports:
+      - "8080:8080"
+  mail:
+    image: axllent/mailpit
+    container_name: managing_stock_mail
+    restart: always
+    ports:
+      - "1025:1025" # SMTP
+      - "8025:8025" # web UI
+
+volumes:
+  mana_stock_pgdata:
+    name: managing_stock_backend_mana_stock_pgdata # reuse the existing data volume
