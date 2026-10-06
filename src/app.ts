@@ -6,9 +6,10 @@ import cors from 'cors';
 import session from 'express-session';
 import pgSession from 'connect-pg-simple';
 import { env } from './config/env.js';
-import { uploadDir } from './middleware/upload.js';
+import { csrfProtect } from './middleware/csrf.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 import { authRouter } from './routes/auth.js';
+import { filesRouter } from './routes/files.js';
 import { usersRouter } from './routes/users.js';
 import { companyRouter } from './routes/company.js';
 import { productsRouter } from './routes/products.js';
@@ -48,9 +49,10 @@ export function createApp(): Application {
   );
 
   app.get('/health', (_req, res) => void res.json({ status: 'ok' }));
-  app.use('/uploads', express.static(uploadDir));
 
   const api = express.Router();
+  api.use(csrfProtect); // every POST/PUT/PATCH/DELETE needs the token + an allowed Origin
+  api.use('/files', filesRouter);
   api.use('/auth', authRouter);
   api.use('/users', usersRouter);
   api.use('/company', companyRouter);

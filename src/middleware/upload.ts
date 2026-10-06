@@ -14,7 +14,7 @@ export const imageUpload = multer({
     destination: uploadDir,
     filename: (_req, file, cb) => cb(null, randomUUID() + path.extname(file.originalname).toLowerCase()),
   }),
-  limits: { fileSize: 2 * 1024 * 1024 },
+  limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_req, file, cb) =>
     /^image\/(png|jpe?g|webp|gif)$/.test(file.mimetype)
       ? cb(null, true)

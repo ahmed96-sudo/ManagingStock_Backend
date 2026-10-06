@@ -7,9 +7,13 @@ import { env } from '../config/env.js';
 import { HttpError } from '../lib/errors.js';
 import { roles } from '../lib/schemas.js';
 import { requireAuth } from '../middleware/auth.js';
+import { csrfToken } from '../middleware/csrf.js';
 import { validate } from '../middleware/validate.js';
 
 export const authRouter = Router();
+
+// Call once at startup (and after logout) to get the token to send as X-CSRF-Token.
+authRouter.get('/csrf', (req, res) => void res.json({ csrfToken: csrfToken(req) }));
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -79,8 +83,9 @@ authRouter.post('/login', limiter, validate({ body: loginBody }), async (req, re
   await new Promise<void>((resolve, reject) => req.session.regenerate((e) => (e ? reject(e) : resolve())));
   req.session.userId = user.id;
   req.session.role = user.role;
+  const token = csrfToken(req); // fresh token for the new session
   await new Promise<void>((resolve, reject) => req.session.save((e) => (e ? reject(e) : resolve())));
-  res.json(publicUser(user));
+  res.json({ ...publicUser(user), csrfToken: token });
 });
 
 authRouter.post('/logout', (req, res, next) => {
@@ -94,5 +99,5 @@ authRouter.post('/logout', (req, res, next) => {
 authRouter.get('/me', requireAuth, async (req, res) => {
   const user = await db.orm.public.Users.where({ id: req.session.userId! }).first();
   if (!user || !user.isActive) throw new HttpError(401, 'Not authenticated');
-  res.json(publicUser(user));
+  res.json({ ...publicUser(user), csrfToken: csrfToken(req) });
 });

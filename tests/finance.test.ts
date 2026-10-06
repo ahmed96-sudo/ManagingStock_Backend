@@ -146,6 +146,7 @@ describe('uploads', () => {
     await s.admin.post(`${api}/company/logo`).attach('image', png, { filename: 'l.png', contentType: 'image/png' }).expect(409); // no company yet
     await s.admin.put(`${api}/company`).send({ companyName: 'Acme', phoneNumber: '1', address: 'x' }).expect(200);
     const logo = await s.admin.post(`${api}/company/logo`).attach('image', png, { filename: 'l.png', contentType: 'image/png' }).expect(200);
-    await s.cashier.get(`/uploads/${logo.body.logoPath}`).expect(200);
+    const file = await s.cashier.get(`${api}/files/${logo.body.logoPath}`).expect(200);
+    expect(file.headers['content-type']).toMatch(/image\/png/);
   });
 });
