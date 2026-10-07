@@ -8,7 +8,7 @@ const { sendMail } = await import('../src/services/mailer.js');
 beforeEach(resetDb);
 afterAll(closePool);
 
-const api = '/api/v1';
+const api = '/api';
 const year = new Date().getFullYear();
 
 async function setup() {

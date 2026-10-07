@@ -3,3 +3,5 @@ dist/
 .env
 .DS_Store
 NewBackendSystemPlan.md
+Backend.md
+FRONTEND_HANDOFF.md

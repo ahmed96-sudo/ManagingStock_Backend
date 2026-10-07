@@ -69,7 +69,7 @@ export function createApp(): Application {
   api.use('/suppliers', suppliersRouter);
   api.use('/client-groups', clientGroupsRouter);
   api.use('/clients', clientsRouter);
-  app.use('/api/v1', api);
+  app.use('/api', api);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

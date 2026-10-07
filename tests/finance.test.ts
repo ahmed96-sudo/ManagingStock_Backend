@@ -4,7 +4,7 @@ import { resetDb, closePool, loginAs } from './helpers.js';
 beforeEach(resetDb);
 afterAll(closePool);
 
-const api = '/api/v1';
+const api = '/api';
 const day = new Date().toISOString().slice(0, 10);
 const year = new Date().getFullYear();
 

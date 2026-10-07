@@ -5,7 +5,7 @@ import { app, resetDb, closePool, loginAs, csrfAgent } from './helpers.js';
 beforeEach(resetDb);
 afterAll(closePool);
 
-const api = '/api/v1';
+const api = '/api';
 const body = { name: 'x', email: 'x@test.local', password: 'password123' };
 
 describe('csrf', () => {

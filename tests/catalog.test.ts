@@ -5,7 +5,7 @@ import { app, resetDb, closePool, loginAs } from './helpers.js';
 beforeEach(resetDb);
 afterAll(closePool);
 
-const api = '/api/v1';
+const api = '/api';
 
 describe('roles', () => {
   it('requires login', async () => {
