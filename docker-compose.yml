@@ -28,3 +28,4 @@ services:
 volumes:
   mana_stock_pgdata:
     name: managing_stock_backend_mana_stock_pgdata # reuse the existing data volume
+    external: true
